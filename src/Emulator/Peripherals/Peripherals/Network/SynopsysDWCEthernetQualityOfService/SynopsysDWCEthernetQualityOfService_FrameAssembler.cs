@@ -169,7 +169,7 @@ namespace Antmicro.Renode.Peripherals.Network
 
             private void FinalizeSegment(IEnumerable<byte> frame, uint length, bool isLast = false)
             {
-                if(TryCreateEthernetFrame(tcpHeader?.Concat(frame) ?? frame, length + (uint?)tcpHeader?.Length ?? 0, out var builtFrame, isLast))
+                if(TryCreateEthernetFrame(tcpHeader?.Concat(frame) ?? frame, length + ((uint?)tcpHeader?.Length ?? 0), out var builtFrame, isLast))
                 {
                     frameReady(builtFrame);
                     packetsFinalized += 1;
