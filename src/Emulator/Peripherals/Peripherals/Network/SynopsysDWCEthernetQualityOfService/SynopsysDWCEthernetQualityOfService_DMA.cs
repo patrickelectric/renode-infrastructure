@@ -532,8 +532,11 @@ namespace Antmicro.Renode.Peripherals.Network
                     isFirst = false;
 
                     writeBackStructure.PacketLength = (uint)bytes.Length;
-                    writeBackStructure.OuterVlanTag = 0x0;
-                    writeBackStructure.InnerVlanTag = 0x0;
+                    // RDES0 carries VLAN tags in the write-back format only when the received
+                    // packet had them; otherwise the hardware leaves the buffer address from
+                    // the read format in place. Drivers (e.g. NuttX) read the buffer address back.
+                    writeBackStructure.OuterVlanTag = (uint)(bufferAddress & 0xFFFF);
+                    writeBackStructure.InnerVlanTag = (uint)((bufferAddress >> 16) & 0xFFFF);
                     writeBackStructure.OamSubtypeCodeOrMACControlPacketOpcode = (uint)frame.UnderlyingPacket.Type;
                     writeBackStructure.Ipv4HeaderPresent = frame.UnderlyingPacket.Type == EthernetPacketType.IpV4;
                     writeBackStructure.Ipv6HeaderPresent = frame.UnderlyingPacket.Type == EthernetPacketType.IpV6;
@@ -855,6 +858,11 @@ namespace Antmicro.Renode.Peripherals.Network
                             txState |= DMAState.ProcessingIntermediate;
                             var writeBackIntermediateStructure = new TxDescriptor.NormalWriteBackDescriptor();
                             writeBackIntermediateStructure.OwnerField = DescriptorOwner.Application;
+                            // TDES0/TDES1 carry a timestamp in the write-back format only when one was
+                            // captured; otherwise the hardware leaves the buffer addresses from the read
+                            // format in place. Drivers (e.g. NuttX) rely on reading the buffer address back.
+                            writeBackIntermediateStructure.TxPacketTimestamp =
+                                ((ulong)structure.Buffer2orBuffer1Address << 32) | structure.Buffer1OrHeaderAddress;
 #if DEBUG
                             this.Log(LogLevel.Noisy, "Transmission: Writing intermediate {0} to 0x{1:X}.", writeBackIntermediateStructure, descriptor.Address);
 #endif
@@ -918,6 +926,14 @@ namespace Antmicro.Renode.Peripherals.Network
                             writeBackStructure.TxTimestampCaptured = true;
                             parent.GetTimestamp(out var seconds, out var nanoseconds);
                             writeBackStructure.TxPacketTimestamp = (seconds << 32) | nanoseconds;
+                        }
+                        else
+                        {
+                            // TDES0/TDES1 carry a timestamp in the write-back format only when one was
+                            // captured; otherwise the hardware leaves the buffer addresses from the read
+                            // format in place. Drivers (e.g. NuttX) rely on reading the buffer address back.
+                            writeBackStructure.TxPacketTimestamp =
+                                ((ulong)structure.Buffer2orBuffer1Address << 32) | structure.Buffer1OrHeaderAddress;
                         }
 #if DEBUG
                         this.Log(LogLevel.Noisy, "Transmission: Writing {0} to 0x{1:X}.", writeBackStructure, descriptor.Address);
